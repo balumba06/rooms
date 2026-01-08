@@ -9,7 +9,7 @@ WORKDIR /app
 ENV NODE_ENV=development
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate --schema=prisma/schema.prisma
+RUN ./node_modules/.bin/prisma generate --schema=prisma/schema.prisma
 RUN npm run build
 # Оставляем только runtime-зависимости
 RUN npm prune --omit=dev
@@ -31,4 +31,4 @@ COPY --from=build /app/src/generated/prisma ./dist/generated/prisma
 
 USER node
 EXPOSE 3000
-CMD ["node","dist/server.js"]
+CMD ["sh","-lc","npx prisma migrate deploy --schema=prisma/schema.prisma && node dist/server.js"]
