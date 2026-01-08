@@ -7,6 +7,7 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM node:24-alpine AS build
 WORKDIR /app
 ENV NODE_ENV=development
+RUN apt-get update -y && apt-get install -y openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN ./node_modules/.bin/prisma generate --schema=prisma/schema.prisma
