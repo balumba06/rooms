@@ -1,13 +1,19 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
+# Добавляем пакет совместимости OpenSSL 1.1
 RUN apk add --no-cache openssl1.1-compat
+
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm i --no-audit --no-fund
 
+
 FROM node:24-alpine AS build
 WORKDIR /app
 ENV NODE_ENV=development
+# Также нужен здесь для генерации
+RUN apk add --no-cache openssl1.1-compat
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN ./node_modules/.bin/prisma generate --schema=prisma/schema.prisma
@@ -15,16 +21,24 @@ RUN npm run build
 # Оставляем только runtime-зависимости
 RUN npm prune --omit=dev
 
+
 FROM node:24-alpine AS dev
 WORKDIR /app
 ENV NODE_ENV=development
+# И здесь для dev-режима
+RUN apk add --no-cache openssl1.1-compat
+
 COPY --from=deps  /app/node_modules ./node_modules
 COPY . .
 CMD ["sh","-lc","npx prisma generate --schema=prisma/schema.prisma && npx prisma migrate deploy || true; node --loader ts-node/esm src/main.ts"]
 
+
 FROM node:24-alpine AS prod
 WORKDIR /app
 ENV NODE_ENV=production
+# И в продакшене для миграций и работы клиента
+RUN apk add --no-cache openssl1.1-compat
+
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist         ./dist
 COPY --from=build /app/prisma ./prisma
