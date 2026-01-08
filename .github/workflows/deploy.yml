@@ -1,0 +1,45 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # Работа 1: Проверка (Сборка и Тесты)
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22' # Используем ту же версию, что и в Docker
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        # Важно! Без этого билд упадет, так как TS не увидит типов
+        run: npx prisma generate
+
+      - name: Build Project
+        run: npm run build
+
+      # Если у вас будут тесты, раскомментируйте эти строки:
+      # - name: Run Tests
+      #   run: npm test
+
+  # Работа 2: Деплой (Запускается только если build-and-check прошел успешно)
+  deploy:
+    needs: build-and-check
+    if: github.ref == 'refs/heads/main' # Деплоим только ветку main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy
+        # Отправляем запрос на хук Render, используя скрытую переменную
+        run: curl "${{ secrets.RENDER_DEPLOY_HOOK }}"
