@@ -1,5 +1,6 @@
 FROM node:24-alpine AS deps
 WORKDIR /app
+RUN apk add --no-cache openssl1.1-compat
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm i --no-audit --no-fund
