@@ -2,12 +2,12 @@ name: Backend CI
 
 on:
   push:
-    branches: [ main ]        # <--- 1. Исправлено имя ветки (было master)
+    branches: [ main ]
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
-    branches: [ main ]        # <--- 1. Исправлено имя ветки (было master)
+    branches: [ main ]
     paths:
       - 'backend/**'
 
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: backend  # <--- ЭТО САМАЯ ВАЖНАЯ СТРОЧКА
 
     steps:
       - name: Checkout
@@ -32,8 +32,8 @@ jobs:
       - name: Install deps
         run: npm ci
 
-      - name: Generate Prisma Client  # <--- 2. Добавлен важный шаг!
+      - name: Generate Prisma Client
         run: npx prisma generate
 
-      # - name: Run tests             # <--- 3. Закомментировано, чтобы не падало, пока нет тестов
+      # - name: Run tests
       #   run: npm test
