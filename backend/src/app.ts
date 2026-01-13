@@ -34,7 +34,7 @@ export async function buildApp() {
   await app.register(helmet)
 
   // CORS ограничивает кросс-доменные запросы. Здесь полностью запрещаем их (origin: false) по умолчанию.
-  await app.register(cors, { origin: true  })
+  await app.register(cors, { origin: false })
 
   /**
    * Ограничитель количества запросов на IP.
@@ -209,44 +209,7 @@ export async function buildApp() {
       }
     }
   )
-  app.get(
-    '/api/rooms',
-    {
-      schema: {
-        operationId: 'listRooms',
-        tags: ['Rooms'],
-        summary: 'Получить список комнат',
-        querystring: T.Object({
-          page: T.Optional(T.Number({ minimum: 1, default: 1 })),
-        }),
-        response: {
-          200: {
-             description: 'Список комнат с пагинацией',
-             // Здесь вам нужно описать схему ответа (RoomsResponseDto), 
-             // либо пока поставить T.Any() для теста
-             content: { 'application/json': { schema: T.Any() } } 
-          }
-        }
-      }
-    },
-    async (request, reply) => {
-       const { page } = request.query as { page: number };
-       const take = 10;
-       const skip = (page - 1) * take;
-
-       // Запрос к базе через Prisma (Убедитесь, что в schema.prisma есть модель Room)
-       const [items, total] = await Promise.all([
-          app.prisma.room.findMany({ take, skip }),
-          app.prisma.room.count()
-       ]);
-
-       return {
-         items,
-         total,
-         page
-       };
-    }
-  );
+  
   // Служебный маршрут: возвращает OpenAPI-спецификацию.
   app.get(
     '/openapi.json',
