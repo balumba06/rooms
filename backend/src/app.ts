@@ -1,6 +1,6 @@
 import Fastify, { type FastifyError } from 'fastify'
 import helmet from '@fastify/helmet'
-import cors from '@fastify/cors'
+import cors from '@fastify/cors' // И
 import rateLimit from '@fastify/rate-limit'
 import swagger from '@fastify/swagger'
 import { STATUS_CODES } from 'node:http'
@@ -34,7 +34,16 @@ export async function buildApp() {
   await app.register(helmet)
 
   // CORS ограничивает кросс-доменные запросы. Здесь полностью запрещаем их (origin: false) по умолчанию.
-  await app.register(cors, { origin: false })
+  await app.register(cors, {
+  // Разрешаем запросы с вашего фронтенда и локальной разработки
+  origin: [
+    'https://balumba06.github.io', 
+    'http://localhost:5173',
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true // Если нужны куки
+})
 
   /**
    * Ограничитель количества запросов на IP.
