@@ -209,7 +209,7 @@ export async function buildApp() {
       }
     }
   )
-  
+
   // Служебный маршрут: возвращает OpenAPI-спецификацию.
   app.get(
     '/openapi.json',
@@ -220,17 +220,6 @@ export async function buildApp() {
       reply.type('application/json').send(app.swagger())
     }
   )
-  // Вставьте это ПОСЛЕ app.get('/api/users', ...)
-app.get('/api/rooms', async (request, reply) => {
-    // Временная заглушка, чтобы проверить связь
-    return {
-        items: [
-            { id: '1', name: 'Test Room', capacity: 10, status: 'available', equipment: [], code: '101' }
-        ],
-        total: 1,
-        page: 1
-    }
-})
 
   return app
 }
