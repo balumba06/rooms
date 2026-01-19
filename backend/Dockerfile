@@ -38,7 +38,7 @@ ENV NODE_ENV=development
 RUN apt-get update -y && apt-get install -y openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-CMD ["sh","-lc","npx prisma generate --schema=prisma/schema.prisma && npx prisma migrate deploy || true; node --loader ts-node/esm src/main.ts"]
+CMD ["sh","-lc","npx prisma generate --schema=prisma/schema.prisma && npx prisma migrate deploy || true; node --loader ts-node/esm src/server.ts"]
 
 # -----------------------------------------------------------
 
