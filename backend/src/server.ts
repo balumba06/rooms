@@ -6,7 +6,13 @@ type AppInstance = Awaited<ReturnType<BuildApp>>
 function describeError(err: unknown) {
   if (err instanceof Error) {
     const meta: Record<string, unknown> = {}
-    const nodeErr = err as NodeJS.ErrnoException & { cause?: unknown }
+    // Явно говорим TS, что могут быть address и port
+const nodeErr = err as NodeJS.ErrnoException & { 
+  cause?: unknown;
+  address?: string;
+  port?: number;
+}
+
 
     if (nodeErr.code !== undefined) meta.code = nodeErr.code
     if (nodeErr.errno !== undefined) meta.errno = nodeErr.errno
