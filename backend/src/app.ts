@@ -34,16 +34,7 @@ export async function buildApp() {
   await app.register(helmet)
 
   // CORS ограничивает кросс-доменные запросы. Здесь полностью запрещаем их (origin: false) по умолчанию.
-  await app.register(cors, {
-  // Разрешаем запросы с вашего фронтенда и локальной разработки
-  origin: [
-    'https://balumba06.github.io', 
-    'http://localhost:5173',
-    'http://localhost:3000'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  credentials: true // Если нужны куки
-})
+  await app.register(cors, { origin: true })
 
   /**
    * Ограничитель количества запросов на IP.
