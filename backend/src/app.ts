@@ -1,6 +1,6 @@
 import Fastify, { type FastifyError } from 'fastify'
 import helmet from '@fastify/helmet'
-import cors from '@fastify/cors' // И
+import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import swagger from '@fastify/swagger'
 import { STATUS_CODES } from 'node:http'
@@ -34,7 +34,7 @@ export async function buildApp() {
   await app.register(helmet)
 
   // CORS ограничивает кросс-доменные запросы. Здесь полностью запрещаем их (origin: false) по умолчанию.
-  await app.register(cors, { origin: true })
+  await app.register(cors, { origin: false })
 
   /**
    * Ограничитель количества запросов на IP.
