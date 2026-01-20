@@ -1,225 +1,106 @@
-import Fastify, { type FastifyError } from 'fastify'
-import helmet from '@fastify/helmet'
+import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import rateLimit from '@fastify/rate-limit'
-import swagger from '@fastify/swagger'
-import { STATUS_CODES } from 'node:http'
-import prismaPlugin from './plugins/prisma.js'
-import { Type as T } from 'typebox'
+import helmet from '@fastify/helmet'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
-import { ValidationProblem, ProblemDetails, User, Health } from './types.js'
+import prismaPlugin from './plugins/prisma.js'
+import { 
+  ValidationProblem, 
+  CreateDeviceSchema, 
+  CreateAuditoriumSchema, 
+  CreateBookingSchema,
+  UpdateDeviceSchema,
+  UpdateAuditoriumSchema,
+  UpdateBookingSchema 
+} from './types.js'
 
-// Этот модуль собирает все настройки Fastify: плагины инфраструктуры, обработчики ошибок и маршруты API.
-
-/**
- * Создает и настраивает экземпляр Fastify, готовый к запуску.
- */
 export async function buildApp() {
   const app = Fastify({
-    logger: true, // Подключаем встроенный логгер Fastify.
-    trustProxy: true, // Разрешаем доверять заголовкам X-Forwarded-* от прокси/ingress.
-    /**
-     * Схема валидации TypeBox -> Fastify генерирует массив ошибок.
-     * Мы превращаем его в ValidationProblem, чтобы вернуть клиенту единый формат Problem Details.
-     */
-    schemaErrorFormatter(errors, dataVar) {
-      const msg = errors.map((e) => e.message).filter(Boolean).join('; ') || 'Validation failed'
-      return new ValidationProblem(msg, errors, dataVar)
-    }
-  }).withTypeProvider<TypeBoxTypeProvider>() // Позволяет Fastify понимать типы TypeBox при описании схем.
+    logger: true,
+    schemaErrorFormatter: (errors, dataVar) => new ValidationProblem('Ошибка валидации', errors, dataVar)
+  }).withTypeProvider<TypeBoxTypeProvider>()
 
-  // === Инфраструктурные плагины ===
-
-  // Helmet добавляет безопасные HTTP-заголовки (Content-Security-Policy, X-DNS-Prefetch-Control и др.).
   await app.register(helmet)
-
-  // CORS ограничивает кросс-доменные запросы. Здесь полностью запрещаем их (origin: false) по умолчанию.
-  await app.register(cors, { origin: false })
-
-  /**
-   * Ограничитель количества запросов на IP.
-   * Плагин автоматически вернет 429, а мы формируем Problem Details в errorResponseBuilder.
-   */
-  await app.register(rateLimit, {
-    max: 100, // Максимум 100 запросов
-    timeWindow: '1 minute', // За одну минуту
-    enableDraftSpec: true, // Добавляет стандартные RateLimit-* заголовки в ответ
-    addHeaders: {
-      'x-ratelimit-limit': true,
-      'x-ratelimit-remaining': true,
-      'x-ratelimit-reset': true,
-      'retry-after': true
-    },
-    errorResponseBuilder(request, ctx) {
-      const seconds = Math.ceil(ctx.ttl / 1000)
-      return {
-        type: 'about:blank',
-        title: 'Too Many Requests',
-        status: 429,
-        detail: `Rate limit exceeded. Retry in ${seconds} seconds.`,
-        instance: request.url
-      } satisfies ProblemDetails
-    }
-  })
-
-  /**
-   * Документация API в формате OpenAPI 3.0.
-   */
-  await app.register(swagger, {
-    openapi: {
-      openapi: '3.0.3',
-      info: {
-        title: 'Rooms API',
-        version: '1.0.0',
-        description: 'HTTP-API, совместим с RFC 9457.'
-      },
-      servers: [{ url: 'http://localhost:3000' }],
-      tags: [
-        { name: 'Users', description: 'Маршруты для управления пользователями' },
-        { name: 'System', description: 'Служебные эндпоинты' }
-      ]
-    }
-  })
-
-  // Плагин с PrismaClient: открывает соединение с БД и добавляет app.prisma во все маршруты.
+  await app.register(cors, { origin: true, methods: '*', allowedHeaders: ['*'] })
   await app.register(prismaPlugin)
 
-  // === Глобальные обработчики ошибок ===
+  app.get('/api/health', (req, res) => res.status(200).send('ok'))
 
-  /**
-   * Единая точка обработки ошибок. Мы приводим их к Problem Details и отправляем клиенту JSON.
-   * ValidationProblem превращается в 400, остальные ошибки хранят свой статус или получают 500.
-   */
-  app.setErrorHandler<FastifyError | ValidationProblem>((err, req, reply) => {
-    const status = typeof err.statusCode === 'number' ? err.statusCode : 500
-    const isValidation = err instanceof ValidationProblem
-
-    const problem = {
-      type: 'about:blank',
-      title: STATUS_CODES[status] ?? 'Error',
-      status,
-      detail: err.message || 'Unexpected error',
-      instance: req.url,
-      ...(isValidation ? { errorsText: err.message } : {})
-    }
-
-    reply.code(status).type('application/problem+json').send(problem)
+  // --- DEVICES ----
+  app.get('/api/devices', async () => app.prisma.device.findMany())
+  app.post('/api/devices', { schema: { body: CreateDeviceSchema } }, async (req, reply) => {
+    const device = await app.prisma.device.create({ data: req.body })
+    return reply.code(201).send(device)
+  })
+  app.put('/api/devices/:id', { schema: { body: UpdateDeviceSchema } }, async (req) => {
+    const { id } = req.params as { id: string }
+    return app.prisma.device.update({ where: { id }, data: req.body })
+  })
+  app.delete('/api/devices/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    await app.prisma.device.delete({ where: { id } })
+    return reply.code(204).send()
   })
 
-  // Отдельный обработчик 404: отвечает в формате Problem Details.
-  app.setNotFoundHandler((request, reply) => {
-    reply.code(404).type('application/problem+json').send({
-      type: 'about:blank',
-      title: 'Not Found',
-      status: 404,
-      detail: `Route ${request.method} ${request.url} not found`,
-      instance: request.url
-    } satisfies ProblemDetails)
+  // --- AUDITORIUMS ---
+  app.get('/api/auditoriums', async () => app.prisma.auditorium.findMany())
+  app.post('/api/auditoriums', { schema: { body: CreateAuditoriumSchema } }, async (req, reply) => {
+    const auditorium = await app.prisma.auditorium.create({ data: req.body })
+    return reply.code(201).send(auditorium)
+  })
+  app.put('/api/auditoriums/:id', { schema: { body: UpdateAuditoriumSchema } }, async (req) => {
+    const { id } = req.params as { id: string }
+    return app.prisma.auditorium.update({ where: { id }, data: req.body })
+  })
+  app.delete('/api/auditoriums/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    await app.prisma.auditorium.delete({ where: { id } })
+    return reply.code(204).send()
   })
 
-  // === Маршруты API ===
+  // --- BOOKINGS ---
+  app.get('/api/bookings', async () => {
+    return app.prisma.booking.findMany({ 
+      include: { device: true, auditorium: true },
+      orderBy: { startTime: 'desc' }
+    })
+  })
 
-  /**
-   * GET /api/users — примеры чтения данных из базы через Prisma.
-   */
-  app.get(
-    '/api/users',
-    {
-      schema: {
-        operationId: 'listUsers',
-        tags: ['Users'],
-        summary: 'Возвращает список пользователей',
-        description: 'Получаем id и email для каждого пользователя.',
-        response: {
-          200: {
-            description: 'Список пользователей',
-            content: { 'application/json': { schema: T.Array(User) } }
-          },
-          429: {
-            description: 'Too Many Requests',
-            headers: {
-              'retry-after': {
-                schema: T.Integer({ minimum: 0, description: 'Через сколько секунд можно повторить запрос' })
-              }
-            },
-            content: { 'application/problem+json': { schema: ProblemDetails } }
-          },
-          500: {
-            description: 'Internal Server Error',
-            content: { 'application/problem+json': { schema: ProblemDetails } }
-          }
-        }
-      }
-    },
-    async (_req, _reply) => {
-      // Prisma автоматически превращает результат в Promise; Fastify вернет массив как JSON.
-      return app.prisma.user.findMany({ select: { id: true, email: true } })
+  app.post('/api/bookings', { schema: { body: CreateBookingSchema } }, async (req, reply) => {
+    const { deviceId, auditoriumId, endTime } = req.body
+    
+    // Оставляем только базовую проверку здравого смысла (конец позже начала)
+    if (new Date(endTime) <= new Date()) {
+      return reply.code(400).send({ detail: 'Время окончания должно быть в будущем' })
     }
-  )
 
-  /**
-   * GET /api/health — health-check для мониторинга.
-   * Пытаемся сделать минимальный запрос в БД. Если БД недоступна, возвращаем 503.
-   */
-  app.get(
-    '/api/health',
-    {
-      schema: {
-        operationId: 'health',
-        tags: ['System'],
-        summary: 'Health/Readiness',
-        description: 'Проверяет, что процесс жив и база данных отвечает.',
-        response: {
-          200: {
-            description: 'Ready',
-            content: { 'application/json': { schema: Health } }
-          },
-          503: {
-            description: 'Temporarily unavailable',
-            content: { 'application/problem+json': { schema: ProblemDetails } }
-          },
-          429: {
-            description: 'Too Many Requests',
-            headers: {
-              'retry-after': { schema: T.Integer({ minimum: 0 }) }
-            },
-            content: { 'application/problem+json': { schema: ProblemDetails } }
-          },
-          500: {
-            description: 'Internal Server Error',
-            content: { 'application/problem+json': { schema: ProblemDetails } }
-          }
-        }
-      }
-    },
-    async (_req, reply) => {
-      try {
-        // Если SELECT 1 прошел — сервис готов.
-        await app.prisma.$queryRaw`SELECT 1`
-        return { ok: true } as Health
-      } catch {
-        // Возвращаем 503, чтобы условный балансировщик мог вывести инстанс из ротации.
-        reply.code(503).type('application/problem+json').send({
-          type: 'https://example.com/problems/dependency-unavailable',
-          title: 'Service Unavailable',
-          status: 503,
-          detail: 'Database ping failed',
-          instance: '/api/health'
-        } satisfies ProblemDetails)
-      }
-    }
-  )
+    const booking = await app.prisma.booking.create({
+      data: { deviceId, auditoriumId, endTime: new Date(endTime) },
+      include: { device: true, auditorium: true }
+    })
+    return reply.code(201).send(booking)
+  })
 
-  // Служебный маршрут: возвращает OpenAPI-спецификацию.
-  app.get(
-    '/openapi.json',
-    {
-      schema: { hide: true, tags: ['Internal'] } // Скрыт из списка, но доступен для клиентов/тестов
-    },
-    async (_req, reply) => {
-      reply.type('application/json').send(app.swagger())
-    }
-  )
+  app.put('/api/bookings/:id', { schema: { body: UpdateBookingSchema } }, async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const { deviceId, auditoriumId, endTime } = req.body
+
+    const data: any = {}
+    if (deviceId) data.deviceId = deviceId
+    if (auditoriumId) data.auditoriumId = auditoriumId
+    if (endTime) data.endTime = new Date(endTime)
+
+    return app.prisma.booking.update({
+      where: { id },
+      data,
+      include: { device: true, auditorium: true }
+    })
+  })
+
+  app.delete('/api/bookings/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    await app.prisma.booking.delete({ where: { id } })
+    return reply.code(204).send()
+  })
 
   return app
 }
