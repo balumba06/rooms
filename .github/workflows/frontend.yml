@@ -43,12 +43,12 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build -- --base=/rooms/
+        run: npm run build -- --base=/room-assetsAAA/
 
       - name: Upload artifact for Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist   # каталог с собранным проектом
+          path: frontend/dist   # каталог с собранным проект
 
   deploy:
     needs: build
