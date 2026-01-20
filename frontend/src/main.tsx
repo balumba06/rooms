@@ -6,7 +6,7 @@ import { AuthProvider } from '@/context/auth'
 
 async function enableMocking() {
   if (import.meta.env.DEV) {
-    const { worker } = await import('./mocks/browser')
+    const { worker } = await import('../mocks/browser')
     await worker.start({
       onUnhandledRequest: "bypass",
       serviceWorker: { url: "/mockServiceWorker.js" },
