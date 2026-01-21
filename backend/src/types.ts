@@ -16,17 +16,6 @@ export class ValidationProblem extends Error implements FastifyError {
   }
 }
 
-// Схемы для устройств
-export const DeviceSchema = T.Object({
-  id: T.String(),
-  name: T.String()
-})
-export const CreateDeviceSchema = T.Object({
-  name: T.String({ minLength: 1 })
-})
-export const UpdateDeviceSchema = T.Object({
-  name: T.Optional(T.String({ minLength: 1 }))
-})
 
 // Схемы для аудиторий (Auditorium)
 export const AuditoriumSchema = T.Object({
@@ -46,24 +35,20 @@ export const UpdateAuditoriumSchema = T.Object({
 // Схемы для бронирования
 export const BookingSchema = T.Object({
   id: T.String(),
-  deviceId: T.String(),
   auditoriumId: T.String(),
   startTime: T.String(),
   endTime: T.String(),
-  device: T.Optional(DeviceSchema),
-  auditorium: T.Optional(AuditoriumSchema)
-})
+  auditorium: T.Optional(AuditoriumSchema),
+});
 export const CreateBookingSchema = T.Object({
-  deviceId: T.String(),
   auditoriumId: T.String(),
-  endTime: T.String()
-})
-export const UpdateBookingSchema = T.Object({
-  deviceId: T.Optional(T.String()),
-  auditoriumId: T.Optional(T.String()),
-  endTime: T.Optional(T.String())
-})
+  endTime: T.String(),
+});
 
-export type Device = Static<typeof DeviceSchema>
+export const UpdateBookingSchema = T.Object({
+  auditoriumId: T.Optional(T.String()),
+  endTime: T.Optional(T.String()),
+});
+
 export type Auditorium = Static<typeof AuditoriumSchema>
 export type Booking = Static<typeof BookingSchema>
