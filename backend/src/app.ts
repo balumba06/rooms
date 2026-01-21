@@ -1,56 +1,109 @@
-import { Type as T, type Static } from "typebox";
-import type { FastifyError, FastifySchemaValidationError } from "fastify";
-import type { SchemaErrorDataVar } from "fastify/types/schema.js";
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+import prismaPlugin from "./plugins/prisma.js";
+import {
+  ValidationProblem,
+  CreateAuditoriumSchema,
+  CreateBookingSchema,
+  UpdateAuditoriumSchema,
+  UpdateBookingSchema,
+} from "./types.js";
 
-export class ValidationProblem extends Error implements FastifyError {
-  public readonly name = "ValidationError";
-  public readonly code = "FST_ERR_VALIDATION";
-  public readonly statusCode = 400;
-  public readonly validation: FastifySchemaValidationError[];
-  public readonly validationContext: SchemaErrorDataVar;
+export async function buildApp() {
+  const app = Fastify({
+    logger: true,
+    schemaErrorFormatter: (errors, dataVar) =>
+      new ValidationProblem("Ошибка валидации", errors, dataVar),
+  }).withTypeProvider<TypeBoxTypeProvider>();
 
-  constructor(message: string, errs: any, ctx: any) {
-    super(message);
-    this.validation = errs;
-    this.validationContext = ctx;
-  }
+  await app.register(helmet);
+  await app.register(cors, { origin: true, methods: "*", allowedHeaders: ["*"] });
+  await app.register(prismaPlugin);
+
+  app.get("/api/health", (req, res) => res.status(200).send("ok"));
+
+  // --- AUDITORIUMS ---
+  app.get("/api/auditoriums", async () => app.prisma.auditorium.findMany());
+
+  app.post(
+    "/api/auditoriums",
+    { schema: { body: CreateAuditoriumSchema } },
+    async (req, reply) => {
+      const auditorium = await app.prisma.auditorium.create({ data: req.body });
+      return reply.code(201).send(auditorium);
+    }
+  );
+
+  app.put(
+    "/api/auditoriums/:id",
+    { schema: { body: UpdateAuditoriumSchema } },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return app.prisma.auditorium.update({ where: { id }, data: req.body });
+    }
+  );
+
+  app.delete("/api/auditoriums/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await app.prisma.auditorium.delete({ where: { id } });
+    return reply.code(204).send();
+  });
+
+  // --- BOOKINGS ---
+  app.get("/api/bookings", async () => {
+    return app.prisma.booking.findMany({
+      include: { auditorium: true },
+      orderBy: { startTime: "desc" },
+    });
+  });
+
+  app.post(
+    "/api/bookings",
+    { schema: { body: CreateBookingSchema } },
+    async (req, reply) => {
+      const { auditoriumId, endTime } = req.body;
+
+      if (new Date(endTime) <= new Date()) {
+        return reply
+          .code(400)
+          .send({ detail: "Время окончания должно быть в будущем" });
+      }
+
+      const booking = await app.prisma.booking.create({
+        data: { auditoriumId, endTime: new Date(endTime) },
+        include: { auditorium: true },
+      });
+
+      return reply.code(201).send(booking);
+    }
+  );
+
+  app.put(
+    "/api/bookings/:id",
+    { schema: { body: UpdateBookingSchema } },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      const { auditoriumId, endTime } = req.body;
+
+      const data: any = {};
+      if (auditoriumId) data.auditoriumId = auditoriumId;
+      if (endTime) data.endTime = new Date(endTime);
+
+      return app.prisma.booking.update({
+        where: { id },
+        data,
+        include: { auditorium: true },
+      });
+    }
+  );
+
+  app.delete("/api/bookings/:id", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await app.prisma.booking.delete({ where: { id } });
+    return reply.code(204).send();
+  });
+
+  return app;
 }
-
-// --- AUDITORIUMS ---
-export const AuditoriumSchema = T.Object({
-  id: T.String(),
-  name: T.String(),
-  capacity: T.Integer(),
-});
-
-export const CreateAuditoriumSchema = T.Object({
-  name: T.String({ minLength: 1 }),
-  capacity: T.Integer({ minimum: 1 }),
-});
-
-export const UpdateAuditoriumSchema = T.Object({
-  name: T.Optional(T.String({ minLength: 1 })),
-  capacity: T.Optional(T.Integer({ minimum: 1 })),
-});
-
-// --- BOOKINGS (только аудитория) ---
-export const BookingSchema = T.Object({
-  id: T.String(),
-  auditoriumId: T.String(),
-  startTime: T.String(),
-  endTime: T.String(),
-  auditorium: T.Optional(AuditoriumSchema),
-});
-
-export const CreateBookingSchema = T.Object({
-  auditoriumId: T.String({ minLength: 1 }),
-  endTime: T.String({ minLength: 1 }),
-});
-
-export const UpdateBookingSchema = T.Object({
-  auditoriumId: T.Optional(T.String({ minLength: 1 })),
-  endTime: T.Optional(T.String({ minLength: 1 })),
-});
-
-export type Auditorium = Static<typeof AuditoriumSchema>;
-export type Booking = Static<typeof BookingSchema>;
