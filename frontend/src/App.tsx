@@ -19,6 +19,7 @@ import {
   Stack,
   Chip,
   Divider,
+  MenuItem,
 } from "@mui/material";
 import { Delete, Add, Edit, Refresh } from "@mui/icons-material";
 import { Header } from "./components/Header";
@@ -29,13 +30,27 @@ interface Auditorium {
   capacity: number;
 }
 
+interface Booking {
+  id: string;
+  auditoriumId: string;
+  startTime: string;
+  endTime: string;
+  auditorium?: Auditorium;
+}
+
 function App() {
   const [active, setActive] = useState("catalog");
 
   const [auditoriums, setAuditoriums] = useState<Auditorium[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [newAud, setNewAud] = useState({ name: "", cap: 1 });
+
+  const [bookingForm, setBookingForm] = useState({
+    audId: "",
+    end: "",
+  });
 
   const [editAuditoriumOpen, setEditAuditoriumOpen] = useState(false);
   const [editingAuditorium, setEditingAuditorium] =
@@ -47,13 +62,22 @@ function App() {
     return base;
   }, []);
 
-  const loadAuditoriums = async () => {
+  const loadAll = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/auditoriums`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "Ошибка загрузки");
-      setAuditoriums(Array.isArray(data) ? data : []);
+      const [aRes, bRes] = await Promise.all([
+        fetch(`${API}/auditoriums`),
+        fetch(`${API}/bookings`),
+      ]);
+
+      const aData = await aRes.json();
+      const bData = await bRes.json();
+
+      if (!aRes.ok) throw new Error(aData?.detail || "Ошибка загрузки аудиторий");
+      if (!bRes.ok) throw new Error(bData?.detail || "Ошибка загрузки бронирований");
+
+      setAuditoriums(Array.isArray(aData) ? aData : []);
+      setBookings(Array.isArray(bData) ? bData : []);
     } catch (e: any) {
       console.error(e);
       alert(e.message || "Ошибка");
@@ -63,7 +87,7 @@ function App() {
   };
 
   useEffect(() => {
-    loadAuditoriums();
+    loadAll();
   }, []);
 
   const addAuditorium = async () => {
@@ -83,7 +107,7 @@ function App() {
       if (!res.ok) throw new Error(data?.detail || "Ошибка добавления");
 
       setNewAud({ name: "", cap: 1 });
-      await loadAuditoriums();
+      await loadAll();
     } catch (e: any) {
       alert(e.message || "Ошибка");
     }
@@ -96,7 +120,7 @@ function App() {
       const res = await fetch(`${API}/auditoriums/${id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || "Ошибка удаления");
-      await loadAuditoriums();
+      await loadAll();
     } catch (e: any) {
       alert(e.message || "Ошибка");
     }
@@ -109,10 +133,8 @@ function App() {
 
   const saveAuditorium = async () => {
     if (!editingAuditorium) return;
-    if (!editingAuditorium.name.trim())
-      return alert("Введите название аудитории");
-    if (Number(editingAuditorium.capacity) <= 0)
-      return alert("Вместимость должна быть > 0");
+    if (!editingAuditorium.name.trim()) return alert("Введите название аудитории");
+    if (Number(editingAuditorium.capacity) <= 0) return alert("Вместимость должна быть > 0");
 
     try {
       const res = await fetch(`${API}/auditoriums/${editingAuditorium.id}`, {
@@ -128,7 +150,44 @@ function App() {
 
       setEditAuditoriumOpen(false);
       setEditingAuditorium(null);
-      await loadAuditoriums();
+      await loadAll();
+    } catch (e: any) {
+      alert(e.message || "Ошибка");
+    }
+  };
+
+  const handleBooking = async () => {
+    if (!bookingForm.audId) return alert("Выберите аудиторию");
+    if (!bookingForm.end) return alert("Выберите дату/время окончания");
+
+    try {
+      const res = await fetch(`${API}/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          auditoriumId: bookingForm.audId,
+          endTime: new Date(bookingForm.end).toISOString(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || "Ошибка бронирования");
+
+      setBookingForm({ audId: "", end: "" });
+      await loadAll();
+    } catch (e: any) {
+      alert(e.message || "Ошибка");
+    }
+  };
+
+  const deleteBooking = async (id: string) => {
+    if (!confirm("Удалить бронирование?")) return;
+
+    try {
+      const res = await fetch(`${API}/bookings/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.detail || "Ошибка удаления бронирования");
+      await loadAll();
     } catch (e: any) {
       alert(e.message || "Ошибка");
     }
@@ -151,20 +210,17 @@ function App() {
               Аудитории
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Добавление, редактирование и удаление аудиторий
+              Управление аудиториями и бронированиями
             </Typography>
           </Box>
 
           <Stack direction="row" spacing={1} alignItems="center">
-            <Chip
-              label={`Всего: ${auditoriums.length}`}
-              variant="outlined"
-              color="primary"
-            />
+            <Chip label={`Аудиторий: ${auditoriums.length}`} variant="outlined" color="primary" />
+            <Chip label={`Бронирований: ${bookings.length}`} variant="outlined" />
             <Button
               variant="outlined"
               startIcon={<Refresh />}
-              onClick={loadAuditoriums}
+              onClick={loadAll}
               disabled={loading}
             >
               Обновить
@@ -172,6 +228,43 @@ function App() {
           </Stack>
         </Stack>
 
+        {/* Бронирование */}
+        <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Бронирование аудитории
+          </Typography>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems="center">
+            <TextField
+              select
+              label="Аудитория"
+              value={bookingForm.audId}
+              onChange={(e) => setBookingForm({ ...bookingForm, audId: e.target.value })}
+              fullWidth
+            >
+              {auditoriums.map((a) => (
+                <MenuItem key={a.id} value={a.id}>
+                  {a.name} (мест: {a.capacity})
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              type="datetime-local"
+              label="До"
+              InputLabelProps={{ shrink: true }}
+              value={bookingForm.end}
+              onChange={(e) => setBookingForm({ ...bookingForm, end: e.target.value })}
+              sx={{ width: { xs: "100%", sm: 260 } }}
+            />
+
+            <Button variant="contained" onClick={handleBooking} sx={{ px: 3 }}>
+              Занять
+            </Button>
+          </Stack>
+        </Paper>
+
+        {/* Аудитории */}
         <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
             Добавить аудиторию
@@ -188,9 +281,7 @@ function App() {
               label="Мест"
               type="number"
               value={newAud.cap}
-              onChange={(e) =>
-                setNewAud({ ...newAud, cap: Number(e.target.value) })
-              }
+              onChange={(e) => setNewAud({ ...newAud, cap: Number(e.target.value) })}
               sx={{ width: { xs: "100%", sm: 150 } }}
               inputProps={{ min: 1 }}
             />
@@ -207,7 +298,7 @@ function App() {
           <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            Список
+            Список аудиторий
           </Typography>
 
           <Table>
@@ -220,7 +311,6 @@ function App() {
                 </TableCell>
               </TableRow>
             </TableHead>
-
             <TableBody>
               {auditoriums.map((a) => (
                 <TableRow key={a.id} hover>
@@ -230,10 +320,7 @@ function App() {
                     <IconButton onClick={() => openEditAuditorium(a)}>
                       <Edit />
                     </IconButton>
-                    <IconButton
-                      onClick={() => deleteAuditorium(a.id)}
-                      color="error"
-                    >
+                    <IconButton onClick={() => deleteAuditorium(a.id)} color="error">
                       <Delete />
                     </IconButton>
                   </TableCell>
@@ -252,8 +339,54 @@ function App() {
             </TableBody>
           </Table>
         </Paper>
+
+        {/* Журнал бронирований */}
+        <Paper sx={{ p: 2.5, borderRadius: 3 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            Журнал бронирований
+          </Typography>
+
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Аудитория</TableCell>
+                <TableCell>Начало</TableCell>
+                <TableCell>Окончание</TableCell>
+                <TableCell align="right" width={120}>
+                  Действия
+                </TableCell>
+              </TableRow>
+            </TableHead>
+
+            <TableBody>
+              {bookings.map((b) => (
+                <TableRow key={b.id} hover>
+                  <TableCell>{b.auditorium?.name || b.auditoriumId}</TableCell>
+                  <TableCell>{new Date(b.startTime).toLocaleString()}</TableCell>
+                  <TableCell>{new Date(b.endTime).toLocaleString()}</TableCell>
+                  <TableCell align="right">
+                    <IconButton onClick={() => deleteBooking(b.id)} color="error">
+                      <Delete />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+
+              {!bookings.length && (
+                <TableRow>
+                  <TableCell colSpan={4} sx={{ py: 4 }}>
+                    <Typography color="text.secondary">
+                      Бронирований пока нет.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Paper>
       </Container>
 
+      {/* Диалог редактирования аудитории */}
       <Dialog
         open={editAuditoriumOpen}
         onClose={() => setEditAuditoriumOpen(false)}
