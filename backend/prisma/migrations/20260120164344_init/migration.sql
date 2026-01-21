@@ -17,13 +17,7 @@ CREATE TABLE "users" (
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "devices" (
-    "id" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
 
-    CONSTRAINT "devices_pkey" PRIMARY KEY ("id")
-);
 
 -- CreateTable
 CREATE TABLE "auditoriums" (
@@ -47,9 +41,6 @@ CREATE TABLE "bookings" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
-
--- AddForeignKey
-ALTER TABLE "bookings" ADD CONSTRAINT "bookings_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "devices"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "bookings" ADD CONSTRAINT "bookings_auditorium_id_fkey" FOREIGN KEY ("auditorium_id") REFERENCES "auditoriums"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
