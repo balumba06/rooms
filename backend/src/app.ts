@@ -59,26 +59,42 @@ export async function buildApp() {
     });
   });
 
-  app.post(
-    "/api/bookings",
-    { schema: { body: CreateBookingSchema } },
-    async (req, reply) => {
-      const { auditoriumId, endTime } = req.body;
 
-      if (new Date(endTime) <= new Date()) {
-        return reply
-          .code(400)
-          .send({ detail: "Время окончания должно быть в будущем" });
-      }
+app.post(
+  "/api/bookings",
+  { schema: { body: CreateBookingSchema } },
+  async (req, reply) => {
+    const { auditoriumId, endTime } = req.body;
 
-      const booking = await app.prisma.booking.create({
-        data: { auditoriumId, endTime: new Date(endTime) },
-        include: { auditorium: true },
-      });
+    const startTime = new Date();      // СЕЙЧАС
+    const end = new Date(endTime);     // то, что выбрал пользователь
 
-      return reply.code(201).send(booking);
+    if (end <= startTime) {
+      return reply
+        .code(400)
+        .send({ detail: "Время окончания должно быть в будущем" });
     }
-  );
+
+    const conflict = await app.prisma.booking.findFirst({
+      where: {
+        auditoriumId,
+        startTime: { lt: end },      // existing.start < new.end
+        endTime: { gt: startTime },  // existing.end > new.start
+      },
+    });
+
+    if (conflict) {
+      return reply.code(409).send({ detail: "Аудитория занята в это время" });
+    }
+
+    const booking = await app.prisma.booking.create({
+      data: { auditoriumId, startTime, endTime: end },
+      include: { auditorium: true },
+    });
+
+    return reply.code(201).send(booking);
+  }
+);
 
   app.put(
     "/api/bookings/:id",
