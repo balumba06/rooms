@@ -343,7 +343,7 @@ function App() {
         {/* Журнал бронирований */}
         <Paper sx={{ p: 2.5, borderRadius: 3 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-            Журнал бронирований
+            Бронь
           </Typography>
 
           <Table>
