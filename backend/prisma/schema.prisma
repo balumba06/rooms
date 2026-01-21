@@ -17,14 +17,6 @@ model User {
   @@map("users")
 }
 
-model Device {
-  id       String    @id @default(cuid())
-  name     String
-  bookings Booking[]
-
-  @@map("devices")
-}
-
 model Auditorium {
   id       String    @id @default(cuid())
   name     String
@@ -38,13 +30,9 @@ model Booking {
   id           String     @id @default(cuid())
   startTime    DateTime   @default(now()) @map("start_time")
   endTime      DateTime   @map("end_time")
-  
-  // Связи (Foreign Keys)
-  deviceId     String     @map("device_id")
-  device       Device     @relation(fields: [deviceId], references: [id])
-  
+
   auditoriumId String     @map("auditorium_id")
-  auditorium   Auditorium @relation(fields: [auditoriumId], references: [id])
+  auditorium   Auditorium @relation(fields: [auditoriumId], references: [id], onDelete: Cascade)
 
   @@map("bookings")
 }
