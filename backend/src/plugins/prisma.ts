@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin'
-import { PrismaClient } from '../generated/prisma/index.js'
+import { PrismaClient } from '@prisma/client'
 
 // Расширяем типизацию Fastify: после регистрации плагина у экземпляра появится свойство prisma.
 declare module 'fastify' {
